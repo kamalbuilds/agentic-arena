@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Agent/AI tool directories
+.agent/
+.agents/
+.claude/
+.kiro/
+.trae/
+.windsurf/
+
+# Uniswap skills CLI (symlinks to .agents/)
+skills/
+skills-lock.json
+
+# Vercel
+.vercel/
+
+# Package locks (keep package-lock.json, ignore others)
+yarn.lock
+pnpm-lock.yaml
+
+# Logs
+*.log
+.vercel
+.env*.local
+
+DEMO_SCRIPT
+scripts
+skill/test-agent.ts
+.gstack/
+
+progress
+DEMO_SCRIPT.md
+SUBMISSION.md
+submission 
+synthesis-progress.md
+.env
+.env.local
