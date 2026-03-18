@@ -1,0 +1,385 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0e1a;
+  --foreground: #e2e8f0;
+
+  /* Brand colors - unique to Claw Wars */
+  --claw-red: #e63946;
+  --claw-crimson: #c1121f;
+  --lobster-red: #e63946;
+  --lobster-red-light: #f87171;
+  --impostor-purple: #7b2d8e;
+  --impostor-purple-light: #9d4edd;
+  --crewmate-green: #10b981;
+  --crewmate-green-light: #34d399;
+  --ocean-blue: #0ea5e9;
+  --ocean-deep: #0c4a6e;
+  --treasure-gold: #f59e0b;
+  --neon-orange: #fb923c;
+
+  /* Surfaces */
+  --bg-surface: #111827;
+  --bg-elevated: #1a2235;
+  --border-subtle: #1e293b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-pixel: var(--font-pixel);
+
+  --color-lobster-red: var(--lobster-red);
+  --color-lobster-red-light: var(--lobster-red-light);
+  --color-impostor-purple: var(--impostor-purple);
+  --color-impostor-purple-light: var(--impostor-purple-light);
+  --color-crewmate-green: var(--crewmate-green);
+  --color-crewmate-green-light: var(--crewmate-green-light);
+  --color-claw-red: var(--claw-red);
+  --color-treasure-gold: var(--treasure-gold);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Custom scrollbar - sleeker */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+/* RainbowKit overrides */
+[data-rk] {
+  --rk-colors-accentColor: #ef4444 !important;
+}
+
+/* ========== KEYFRAME ANIMATIONS ========== */
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px 0 rgba(239, 68, 68, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(239, 68, 68, 0.25);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-12px) rotate(2deg); }
+  66% { transform: translateY(4px) rotate(-1deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes border-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes bubble-rise {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateY(-10vh) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes text-glow {
+  0%, 100% {
+    text-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    text-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+  }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes aurora {
+  0% { transform: translateX(-50%) translateY(-50%) rotate(0deg); }
+  50% { transform: translateX(-50%) translateY(-50%) rotate(180deg); }
+  100% { transform: translateX(-50%) translateY(-50%) rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes typewriter {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ========== UTILITY CLASSES ========== */
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 4s ease infinite;
+}
+
+.animate-border-glow {
+  animation: border-glow 2s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+.animate-text-glow {
+  animation: text-glow 2s ease-in-out infinite;
+}
+
+/* ========== SPECIAL EFFECTS ========== */
+
+/* Card system - solid dark surfaces with subtle depth */
+.glass-card {
+  background: rgba(10, 15, 30, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+.glass-card-hover:hover {
+  background: rgba(12, 18, 35, 0.95);
+  border-color: rgba(148, 163, 184, 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Accent gradient border - static, subtle */
+.gradient-border {
+  position: relative;
+  background: rgba(10, 15, 30, 0.9);
+  border-radius: 16px;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 17px;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(239, 68, 68, 0.15),
+    rgba(168, 85, 247, 0.1),
+    rgba(34, 211, 238, 0.05)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Accent text - subtle glow, not neon */
+.neon-red {
+  color: #ef4444;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+}
+
+.neon-green {
+  color: #22c55e;
+  text-shadow: 0 0 8px rgba(34, 197, 94, 0.25);
+}
+
+.neon-purple {
+  color: #a855f7;
+  text-shadow: 0 0 8px rgba(168, 85, 247, 0.25);
+}
+
+.neon-orange {
+  color: #fb923c;
+  text-shadow: 0 0 8px rgba(251, 146, 60, 0.25);
+}
+
+/* Glow boxes - subtle accent border glow */
+.glow-red {
+  box-shadow: 0 0 1px rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.12);
+}
+
+.glow-green {
+  box-shadow: 0 0 1px rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.12);
+}
+
+.glow-purple {
+  box-shadow: 0 0 1px rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.12);
+}
+
+.glow-orange {
+  box-shadow: 0 0 1px rgba(251, 146, 60, 0.2);
+  border-color: rgba(251, 146, 60, 0.12);
+}
+
+/* Background floating bubbles */
+.bubble {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(239, 68, 68, 0.08), transparent);
+  animation: bubble-rise linear infinite;
+}
+
+/* Phase-specific accents - top border highlight */
+.phase-discussion {
+  border-top: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.phase-voting {
+  border-top: 1px solid rgba(251, 146, 60, 0.2);
+}
+
+.phase-elimination {
+  border-top: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Card shine effect on hover - very subtle */
+.card-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-shine::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+  pointer-events: none;
+}
+
+/* Smooth page transitions */
+main {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Selection color */
+::selection {
+  background-color: rgba(239, 68, 68, 0.3);
+  color: #fff;
+}
+
+/* Ambient background */
+.ambient-bg {
+  background: var(--background);
+}
+
+/* Pixel font utility */
+.font-pixel {
+  font-family: var(--font-pixel), monospace;
+}
+
+/* Live pulse dot */
+.live-dot {
+  position: relative;
+}
+
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0;
+  animation: pulse-ring 2s infinite;
+}
