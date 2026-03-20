@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: claw-wars-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=clawwars
+      - POSTGRES_PASSWORD=clawwars
+      - POSTGRES_DB=clawwars
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clawwars"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  game-engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile
+    container_name: claw-wars-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - WS_PORT=3002
+      - DATABASE_URL=postgresql://clawwars:clawwars@postgres:5432/clawwars
+      - BASE_RPC_URL=${BASE_RPC_URL:-https://sepolia.base.org}
+      - BASE_CHAIN_ID=${BASE_CHAIN_ID:-84532}
+      - OPERATOR_PRIVATE_KEY=${OPERATOR_PRIVATE_KEY}
+      - GAME_CONTRACT_ADDRESS=${GAME_CONTRACT_ADDRESS}
+      - BETTING_CONTRACT_ADDRESS=${BETTING_CONTRACT_ADDRESS}
+      - LEADERBOARD_CONTRACT_ADDRESS=${LEADERBOARD_CONTRACT_ADDRESS}
+      - MOLTBOOK_API_URL=${MOLTBOOK_API_URL:-https://moltbook.com/api}
+      - MOLTBOOK_API_KEY=${MOLTBOOK_API_KEY}
+      - MOLTBOOK_SUBMOLT=${MOLTBOOK_SUBMOLT:-m/clawwars}
+      - CLAW_TOKEN_ADDRESS=${CLAW_TOKEN_ADDRESS}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DEFAULT_STAKE=${DEFAULT_STAKE:-500000000000000000}
+      - MIN_PLAYERS=${MIN_PLAYERS:-5}
+      - MAX_PLAYERS=${MAX_PLAYERS:-8}
+      - DISCUSSION_DURATION=${DISCUSSION_DURATION:-180}
+      - VOTING_DURATION=${VOTING_DURATION:-60}
+      - MAX_ROUNDS=${MAX_ROUNDS:-5}
+      - IMPOSTOR_COUNT=${IMPOSTOR_COUNT:-1}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-runner:
+    build:
+      context: ./aws/agent-runner
+      dockerfile: Dockerfile
+    container_name: claw-wars-agents
+    depends_on:
+      game-engine:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - GAME_SERVER_URL=http://game-engine:3001
+      - AGENT_COUNT=${AGENT_COUNT:-8}
+      - AGENT_PRIVATE_KEYS=${AGENT_PRIVATE_KEYS}
+      - BASE_RPC_URL=${BASE_RPC_URL:-https://sepolia.base.org}
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
