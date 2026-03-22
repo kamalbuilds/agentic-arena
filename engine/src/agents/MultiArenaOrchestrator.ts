@@ -16,6 +16,7 @@ import { tradingCompetitionArena } from "../arenas/TradingCompetitionArena.js";
 import { auctionArena } from "../arenas/AuctionArena.js";
 import { arenaFramework } from "../game/ArenaFramework.js";
 import { AgentBrain } from "./AgentBrain.js";
+import { submitAgentFeedback, isErc8004Configured } from "../chain/erc8004.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 
@@ -136,9 +137,12 @@ export class MultiArenaOrchestrator {
       this.stats.roundsCompleted++;
 
       // Record arena activity on-chain (non-blocking)
-      arenaFramework.recordGamePlayed(1, BigInt(this.stats.marketsCreated * 1000000)); // Prediction Market
-      arenaFramework.recordGamePlayed(2, BigInt(this.stats.tradesExecuted * 1000000)); // Trading
-      arenaFramework.recordGamePlayed(3, BigInt(this.stats.bidsPlaced * 1000000)); // Auction
+      arenaFramework.recordGamePlayed(1, BigInt(this.stats.marketsCreated * 1000000));
+      arenaFramework.recordGamePlayed(2, BigInt(this.stats.tradesExecuted * 1000000));
+      arenaFramework.recordGamePlayed(3, BigInt(this.stats.bidsPlaced * 1000000));
+
+      // Record cross-arena reputation via ERC-8004
+      await this.recordArenaReputation().catch(() => {});
 
       if (round < this.config.roundsPerArena - 1 && this.running) {
         log.info(`Next round in ${this.config.delayBetweenRoundsMs / 1000}s...`);
@@ -438,6 +442,33 @@ export class MultiArenaOrchestrator {
             }
           }
         } catch { /* Resolution failed */ }
+      }
+    }
+  }
+
+  /** Record arena performance as ERC-8004 reputation feedback */
+  private async recordArenaReputation(): Promise<void> {
+    if (!isErc8004Configured()) return;
+
+    for (const agent of this.agents) {
+      // Calculate cross-arena performance score (0-100)
+      const totalGames = agent.wins + agent.losses;
+      if (totalGames === 0) continue;
+
+      const winRate = agent.wins / totalGames;
+      const score = Math.round(winRate * 100);
+
+      try {
+        // Submit reputation feedback with arena-specific tags
+        await submitAgentFeedback(
+          BigInt(0), // placeholder agentId (real ID from ERC-8004 registration)
+          score,
+          "multi_arena",
+          `rounds:${this.stats.roundsCompleted}`,
+          `balance:${agent.balance.toFixed(0)}`
+        );
+      } catch {
+        // Non-blocking
       }
     }
   }
