@@ -15,6 +15,8 @@ import { predictionMarketArena } from "../arenas/PredictionMarketArena.js";
 import { tradingCompetitionArena } from "../arenas/TradingCompetitionArena.js";
 import { auctionArena } from "../arenas/AuctionArena.js";
 import { arenaFramework } from "../game/ArenaFramework.js";
+import { AgentBrain } from "./AgentBrain.js";
+import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 
 const log = logger.child("MultiArenaOrchestrator");
@@ -70,6 +72,7 @@ interface SimulatedAgent {
   balance: number; // simulated USDC balance
   wins: number;
   losses: number;
+  brain: AgentBrain;
 }
 
 export class MultiArenaOrchestrator {
@@ -184,18 +187,20 @@ export class MultiArenaOrchestrator {
 
   private initializeAgents(): void {
     this.agents = [];
+    const hasApiKey = !!(process.env.ANTHROPIC_API_KEY || config.ai.provider !== "anthropic");
     for (let i = 0; i < this.config.agentCount; i++) {
       const pool = AGENT_POOL[i];
       this.agents.push({
         name: pool.name,
         address: `0x${(i + 1).toString(16).padStart(40, "0")}`,
         personality: pool.personality,
-        balance: 1000, // start with 1000 USDC
+        balance: 1000,
         wins: 0,
         losses: 0,
+        brain: new AgentBrain({ personality: pool.personality }),
       });
     }
-    log.info(`Initialized ${this.agents.length} agents for multi-arena play`);
+    log.info(`Initialized ${this.agents.length} agents for multi-arena play (LLM: ${hasApiKey ? "enabled" : "fallback mode"})`);
   }
 
   // ─── Prediction Market Round ──────────────────────────────────────
@@ -222,23 +227,30 @@ export class MultiArenaOrchestrator {
 
     log.info(`  Market: "${question}"`);
 
-    // Each agent makes a prediction based on personality
-    for (const agent of this.agents) {
-      const prediction = this.agentPrediction(agent, question);
-      const confidence = 30 + Math.floor(Math.random() * 60); // 30-90
-      const stake = Math.min(Math.floor(agent.balance * 0.1), 50).toString();
-
-      predictionMarketArena.placePrediction(
-        market.id,
-        agent.address,
-        agent.name,
-        prediction,
-        confidence,
-        stake,
-        `${agent.personality} analysis of: ${question}`
-      );
-      this.stats.predictionsPlaced++;
-    }
+    // Each agent makes a prediction using LLM reasoning
+    const predictionPromises = this.agents.map(async (agent) => {
+      try {
+        const decision = await agent.brain.decidePrediction(question, "game-meta", agent.balance);
+        predictionMarketArena.placePrediction(
+          market.id,
+          agent.address,
+          agent.name,
+          decision.prediction,
+          decision.confidence,
+          decision.stake,
+          decision.reasoning
+        );
+        this.stats.predictionsPlaced++;
+        log.info(`  ${agent.name}: ${decision.prediction ? "YES" : "NO"} (${decision.confidence}% conf, ${decision.stake} USDC)`);
+      } catch {
+        // Fallback: random prediction if LLM fails
+        const prediction = Math.random() > 0.5;
+        const stake = Math.min(Math.floor(agent.balance * 0.1), 50).toString();
+        predictionMarketArena.placePrediction(market.id, agent.address, agent.name, prediction, 50, stake, "fallback");
+        this.stats.predictionsPlaced++;
+      }
+    });
+    await Promise.all(predictionPromises);
 
     // Resolve after a short delay (simulate time passing)
     await this.sleep(1000);
@@ -281,33 +293,44 @@ export class MultiArenaOrchestrator {
       tradingCompetitionArena.joinCompetition(comp.id, agent.address, agent.name, "100");
     }
 
-    // Simulate trading rounds
-    const tokens = ["ETH", "WETH", "cbBTC"];
+    // LLM-powered trading rounds
+    const allowedTokens = ["USDC", "ETH", "WETH", "cbBTC"];
     const tradeRounds = 3;
 
     for (let t = 0; t < tradeRounds && this.running; t++) {
-      for (const agent of this.agents) {
-        // Each agent decides a trade based on personality
-        const shouldTrade = Math.random() > 0.3; // 70% chance to trade
-        if (!shouldTrade) continue;
+      const tradePromises = this.agents.map(async (agent) => {
+        try {
+          const portfolio: Record<string, string> = { USDC: "100" };
+          const decision = await agent.brain.decideTradeAction(portfolio, allowedTokens, t + 1, tradeRounds);
 
-        const tokenOut = tokens[Math.floor(Math.random() * tokens.length)];
-        const amountIn = (5 + Math.floor(Math.random() * 20)).toString();
-        const priceMultiplier = 0.95 + Math.random() * 0.1; // simulated price impact
-        const amountOut = (parseFloat(amountIn) * priceMultiplier).toFixed(4);
+          if (decision.action !== "hold" && parseFloat(decision.amount) > 0) {
+            const priceMultiplier = 0.95 + Math.random() * 0.1;
+            const amountOut = (parseFloat(decision.amount) * priceMultiplier).toFixed(4);
 
-        tradingCompetitionArena.recordTrade(comp.id, agent.address, {
-          timestamp: Date.now(),
-          tokenIn: "USDC",
-          tokenOut,
-          amountIn,
-          amountOut,
-          reasoning: `${agent.personality}: buying ${tokenOut} at round ${t + 1}`,
-        });
-        this.stats.tradesExecuted++;
-      }
+            tradingCompetitionArena.recordTrade(comp.id, agent.address, {
+              timestamp: Date.now(),
+              tokenIn: decision.action === "buy" ? "USDC" : decision.token,
+              tokenOut: decision.action === "buy" ? decision.token : "USDC",
+              amountIn: decision.amount,
+              amountOut,
+              reasoning: decision.reasoning,
+            });
+            this.stats.tradesExecuted++;
+            log.info(`  ${agent.name}: ${decision.action} ${decision.amount} ${decision.token} - ${decision.reasoning.slice(0, 60)}`);
+          }
+        } catch {
+          // Fallback: random trade
+          const tokenOut = allowedTokens[1 + Math.floor(Math.random() * (allowedTokens.length - 1))];
+          tradingCompetitionArena.recordTrade(comp.id, agent.address, {
+            timestamp: Date.now(), tokenIn: "USDC", tokenOut,
+            amountIn: "10", amountOut: (10 * (0.95 + Math.random() * 0.1)).toFixed(4),
+            reasoning: "fallback trade",
+          });
+          this.stats.tradesExecuted++;
+        }
+      });
+      await Promise.all(tradePromises);
 
-      // Snapshot after each trading round
       tradingCompetitionArena.snapshotPortfolios(comp.id);
       await this.sleep(500);
     }
@@ -367,48 +390,42 @@ export class MultiArenaOrchestrator {
       const baseValue = parseFloat(items[i].baseValue);
 
       if (format === "english") {
+        // English: LLM decides each round whether to raise
         let currentBid = baseValue;
         for (let bidRound = 0; bidRound < 3; bidRound++) {
           for (const agent of this.agents) {
-            const willBid = Math.random() > 0.4;
-            if (!willBid) continue;
-
-            const bidAmount = currentBid + (1 + Math.floor(Math.random() * 5));
-            if (bidAmount > agent.balance * 0.3) continue;
-
             try {
-              auctionArena.placeBid(
-                auctionId,
-                agent.address,
-                agent.name,
-                bidAmount.toString(),
-                `${agent.personality}: ${items[i].name} worth ${bidAmount} to me`
+              const decision = await agent.brain.decideAuctionBid(
+                items[i].name, items[i].description || items[i].category,
+                currentBid.toString(), agent.balance, "english"
               );
+              if (!decision.bid || parseFloat(decision.amount) <= currentBid) continue;
+              if (parseFloat(decision.amount) > agent.balance * 0.4) continue;
+
+              auctionArena.placeBid(auctionId, agent.address, agent.name, decision.amount, decision.reasoning);
               this.stats.bidsPlaced++;
-              currentBid = bidAmount;
-            } catch {
-              // Bid rejected
-            }
+              currentBid = parseFloat(decision.amount);
+              log.info(`  ${agent.name} bids ${decision.amount} on ${items[i].name}`);
+            } catch { /* Bid rejected or LLM error */ }
           }
         }
         try { auctionArena.endAuction(auctionId); } catch { /* already ended */ }
       } else {
-        for (const agent of this.agents) {
-          const bidMultiplier = 0.8 + Math.random() * 0.6;
-          const bidAmount = Math.floor(baseValue * bidMultiplier);
-          if (bidAmount > agent.balance * 0.3) continue;
-
+        // Sealed/Vickrey: LLM makes one-shot bid decision
+        const bidPromises = this.agents.map(async (agent) => {
           try {
-            auctionArena.placeBid(
-              auctionId,
-              agent.address,
-              agent.name,
-              bidAmount.toString(),
-              `${agent.personality}: sealed bid for ${items[i].name}`
+            const decision = await agent.brain.decideAuctionBid(
+              items[i].name, items[i].description || items[i].category,
+              baseValue.toString(), agent.balance, format
             );
+            if (!decision.bid || parseFloat(decision.amount) <= 0) return;
+            if (parseFloat(decision.amount) > agent.balance * 0.4) return;
+
+            auctionArena.placeBid(auctionId, agent.address, agent.name, decision.amount, decision.reasoning);
             this.stats.bidsPlaced++;
-          } catch { /* Bid rejected */ }
-        }
+          } catch { /* Bid rejected or LLM error */ }
+        });
+        await Promise.all(bidPromises);
 
         try {
           const auctionResult = auctionArena.resolveSealedAuction(auctionId);
@@ -423,17 +440,6 @@ export class MultiArenaOrchestrator {
         } catch { /* Resolution failed */ }
       }
     }
-  }
-
-  // ─── Agent Decision Helpers ───────────────────────────────────────
-
-  private agentPrediction(agent: SimulatedAgent, _question: string): boolean {
-    // Simple personality-based prediction logic
-    if (agent.personality.includes("contrarian")) return Math.random() > 0.6; // tends to bet NO
-    if (agent.personality.includes("conservative")) return Math.random() > 0.45; // slightly cautious
-    if (agent.personality.includes("aggressive")) return Math.random() > 0.4; // slightly bullish
-    if (agent.personality.includes("momentum")) return agent.wins > agent.losses; // follow streak
-    return Math.random() > 0.5; // coin flip for others
   }
 
   private getUptime(): number {
