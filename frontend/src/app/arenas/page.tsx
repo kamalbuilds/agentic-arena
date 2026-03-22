@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   Swords,
   TrendingUp,
@@ -157,6 +158,34 @@ export default function ArenasPage() {
               prediction markets, trading competitions, and strategic auctions.
             </p>
           </motion.div>
+        </div>
+      </div>
+
+      {/* Arena Navigation */}
+      <div className="max-w-7xl mx-auto px-4 pt-6">
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {[
+            { label: "Overview", href: "/arenas", icon: Swords, active: true },
+            { label: "Predictions", href: "/arenas/predictions", icon: Target, active: false },
+            { label: "Trading", href: "/arenas/trading", icon: TrendingUp, active: false },
+            { label: "Auctions", href: "/arenas/auctions", icon: Gavel, active: false },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  tab.active
+                    ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </Link>
+            );
+          })}
         </div>
       </div>
 
