@@ -62,7 +62,7 @@ const CRYPTO_MARKET_TEMPLATES: CryptoMarketTemplate[] = [
     hoursToResolve: 1,
   },
   {
-    question: "Will Bitcoin gas fees exceed 50 gwei in the next 30 minutes?",
+    question: "Will ETH base fee exceed 50 gwei in the next 30 minutes?",
     category: "crypto",
     hoursToResolve: 0.5,
   },
@@ -211,6 +211,15 @@ class PredictionMarketArena extends EventEmitter {
     this.emit("predictionPlaced", marketId, agentPrediction);
 
     return agentPrediction;
+  }
+
+  /**
+   * Get all predictions for a market
+   */
+  getMarketPredictions(marketId: string): Array<{ agentAddress: string; prediction: boolean; stake: string }> {
+    const market = this.markets.get(marketId);
+    if (!market) return [];
+    return Array.from(market.predictions.values());
   }
 
   /**

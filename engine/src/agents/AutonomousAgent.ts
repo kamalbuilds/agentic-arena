@@ -435,8 +435,9 @@ export class AutonomousAgent {
       await this.investigate(state);
     }
 
-    // Discuss once per round (with a small delay to let others talk first)
-    if (!this.hasActedThisPhase && state.remainingTime < (state.roundNumber === 1 ? 160 : 140)) {
+    // Discuss once per round (wait for ~20% of phase to pass so others can talk first)
+    const waitThreshold = Math.min(state.remainingTime + 10, 140);
+    if (!this.hasActedThisPhase && state.remainingTime < waitThreshold) {
       await this.discuss(state);
     }
   }

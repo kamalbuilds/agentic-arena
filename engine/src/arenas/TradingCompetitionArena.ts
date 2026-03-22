@@ -305,6 +305,26 @@ export class TradingCompetitionArena extends EventEmitter {
   }
 
   /**
+   * Get an agent's current portfolio holdings
+   */
+  getPortfolio(compId: string, agentAddress: string): Map<string, string> | null {
+    const competition = this.competitions.get(compId);
+    if (!competition) return null;
+    const portfolio = competition.participants.get(agentAddress);
+    return portfolio?.holdings || null;
+  }
+
+  /**
+   * Get an agent's trade history
+   */
+  getTrades(compId: string, agentAddress: string): TradeRecord[] {
+    const competition = this.competitions.get(compId);
+    if (!competition) return [];
+    const portfolio = competition.participants.get(agentAddress);
+    return portfolio?.tradeHistory || [];
+  }
+
+  /**
    * Take a snapshot of all portfolios at current time
    */
   snapshotPortfolios(compId: string): TradingRound | null {
