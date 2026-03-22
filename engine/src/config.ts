@@ -50,6 +50,19 @@ export const config = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || "",
   },
+  venice: {
+    apiKey: process.env.VENICE_API_KEY || "",
+    baseUrl: "https://api.venice.ai/api/v1",
+    model: process.env.VENICE_MODEL || "llama-3.3-70b",
+  },
+  bankr: {
+    apiKey: process.env.BANKR_API_KEY || "",
+    baseUrl: "https://llm.bankr.bot/v1",
+    model: process.env.BANKR_MODEL || "claude-sonnet-4-5-20250514",
+  },
+  ai: {
+    provider: (process.env.AI_PROVIDER || "anthropic") as "anthropic" | "venice" | "bankr",
+  },
   database: {
     url: process.env.DATABASE_URL || "",
   },

@@ -17,6 +17,7 @@ import { registerAgentIdentity, isErc8004Configured } from "../chain/erc8004.js"
 import { getAgentMemory, type AgentMemory } from "./AgentMemory.js";
 import { autoRegisterServices } from "./AgentServiceMarket.js";
 import { privateKeyToAccount } from "viem/accounts";
+import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 
 const agentLogger = logger.child("AutonomousAgent");
@@ -125,6 +126,7 @@ export class AutonomousAgent {
     this.brain = new AgentBrain({
       apiKey: cfg.anthropicApiKey,
       personality: this.personality,
+      provider: config.ai.provider,
     });
 
     this.trader = new TradingStrategy({

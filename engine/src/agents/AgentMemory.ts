@@ -15,8 +15,48 @@
  */
 
 import { logger } from "../utils/logger.js";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
 
 const memLogger = logger.child("AgentMemory");
+
+// Persistence directory for cross-session memory
+const MEMORY_DIR = join(process.cwd(), "data", "agent-memory");
+
+function ensureMemoryDir(): void {
+  if (!existsSync(MEMORY_DIR)) {
+    mkdirSync(MEMORY_DIR, { recursive: true });
+  }
+}
+
+function getMemoryPath(agentName: string): string {
+  const safe = agentName.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+  return join(MEMORY_DIR, `${safe}.json`);
+}
+
+function saveToDisk(memory: AgentMemory): void {
+  try {
+    ensureMemoryDir();
+    const data = JSON.stringify(memory.toJSON(), null, 2);
+    writeFileSync(getMemoryPath(memory.agentName), data, "utf-8");
+  } catch (err) {
+    memLogger.warn(`Failed to persist memory for ${memory.agentName}`, err);
+  }
+}
+
+function loadFromDisk(agentName: string): AgentMemory | null {
+  try {
+    const path = getMemoryPath(agentName);
+    if (!existsSync(path)) return null;
+    const raw = readFileSync(path, "utf-8");
+    const data = JSON.parse(raw);
+    memLogger.info(`Loaded persisted memory for ${agentName} (${data.gameHistory?.length || 0} games)`);
+    return AgentMemory.fromJSON(data);
+  } catch (err) {
+    memLogger.warn(`Failed to load memory for ${agentName}`, err);
+    return null;
+  }
+}
 
 export interface OpponentProfile {
   name: string;
@@ -61,7 +101,7 @@ export class AgentMemory {
   private opponents: Map<string, OpponentProfile> = new Map();
   private gameHistory: GameMemory[] = [];
   private insights: StrategyInsight[] = [];
-  private agentName: string;
+  readonly agentName: string;
   private maxGameHistory = 50;
 
   constructor(agentName: string) {
@@ -186,6 +226,9 @@ export class AgentMemory {
     memLogger.info(
       `${this.agentName} recorded game ${game.gameId}: ${game.won ? "won" : "lost"} as ${game.myRole}, ${keyEvents.length} key events`
     );
+
+    // Persist to disk after every game
+    saveToDisk(this);
   }
 
   /** Get strategic context about known opponents for the LLM */
@@ -423,12 +466,18 @@ export class AgentMemory {
   }
 }
 
-// Global memory store (in-memory, persisted via conversation log export)
+// Global memory store with file-based persistence
 const agentMemories = new Map<string, AgentMemory>();
 
 export function getAgentMemory(agentName: string): AgentMemory {
   if (!agentMemories.has(agentName)) {
-    agentMemories.set(agentName, new AgentMemory(agentName));
+    // Try loading from disk first (cross-session persistence)
+    const loaded = loadFromDisk(agentName);
+    if (loaded) {
+      agentMemories.set(agentName, loaded);
+    } else {
+      agentMemories.set(agentName, new AgentMemory(agentName));
+    }
   }
   return agentMemories.get(agentName)!;
 }

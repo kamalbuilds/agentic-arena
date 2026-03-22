@@ -1,7 +1,12 @@
 /**
  * AgentBrain - LLM-powered decision engine for autonomous agents
  *
- * Uses Claude to make strategic decisions during Among Claws games:
+ * Supports multiple inference providers:
+ * - Anthropic (Claude) - Default, direct API
+ * - Venice AI - Private inference, zero logs, uncensored models
+ * - Bankr LLM Gateway - Unified API for 20+ models, on-chain payment
+ *
+ * Uses LLMs to make strategic decisions during Among Claws games:
  * - What to say during discussions (deception/deduction)
  * - Who to investigate
  * - Who to vote for
@@ -10,9 +15,13 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 
 const brainLogger = logger.child("AgentBrain");
+
+export type InferenceProvider = "anthropic" | "venice" | "bankr";
 
 interface GameContext {
   agentName: string;
@@ -51,20 +60,90 @@ export interface InvestigationDecision {
 }
 
 export class AgentBrain {
-  private client: Anthropic;
+  private anthropicClient?: Anthropic;
+  private openaiClient?: OpenAI;
   private personality: string;
   private model: string;
+  private provider: InferenceProvider;
 
   constructor(options: {
     apiKey?: string;
     personality?: string;
     model?: string;
+    provider?: InferenceProvider;
   }) {
-    this.client = new Anthropic({
-      apiKey: options.apiKey || process.env.ANTHROPIC_API_KEY,
-    });
+    this.provider = options.provider || config.ai.provider;
     this.personality = options.personality || "analytical and strategic";
-    this.model = options.model || "claude-sonnet-4-5-20250514";
+
+    switch (this.provider) {
+      case "venice":
+        this.openaiClient = new OpenAI({
+          apiKey: options.apiKey || config.venice.apiKey,
+          baseURL: config.venice.baseUrl,
+        });
+        this.model = options.model || config.venice.model;
+        brainLogger.info(`Using Venice AI (private inference, model: ${this.model})`);
+        break;
+
+      case "bankr":
+        this.openaiClient = new OpenAI({
+          apiKey: options.apiKey || config.bankr.apiKey,
+          baseURL: config.bankr.baseUrl,
+        });
+        this.model = options.model || config.bankr.model;
+        brainLogger.info(`Using Bankr LLM Gateway (on-chain funded, model: ${this.model})`);
+        break;
+
+      case "anthropic":
+      default:
+        this.anthropicClient = new Anthropic({
+          apiKey: options.apiKey || process.env.ANTHROPIC_API_KEY,
+        });
+        this.model = options.model || "claude-sonnet-4-5-20250514";
+        brainLogger.info(`Using Anthropic (model: ${this.model})`);
+        break;
+    }
+  }
+
+  /** Get current provider info for transparency/logging */
+  getProviderInfo(): { provider: InferenceProvider; model: string; private: boolean } {
+    return {
+      provider: this.provider,
+      model: this.model,
+      private: this.provider === "venice", // Venice = zero logs
+    };
+  }
+
+  /** Unified inference call across all providers */
+  private async infer(system: string, userMessage: string, maxTokens: number): Promise<string> {
+    if (this.provider === "anthropic" && this.anthropicClient) {
+      const response = await this.anthropicClient.messages.create({
+        model: this.model,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: "user", content: userMessage }],
+      });
+      return response.content[0].type === "text" ? response.content[0].text : "";
+    }
+
+    // Venice and Bankr both use OpenAI-compatible API
+    if (this.openaiClient) {
+      const response = await this.openaiClient.chat.completions.create({
+        model: this.model,
+        max_tokens: maxTokens,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userMessage },
+        ],
+        // Venice-specific: disable their default system prompt
+        ...(this.provider === "venice" ? {
+          venice_parameters: { include_venice_system_prompt: false }
+        } as Record<string, unknown> : {}),
+      });
+      return response.choices[0]?.message?.content || "";
+    }
+
+    throw new Error(`No client configured for provider: ${this.provider}`);
   }
 
   /** Decide what to say during discussion phase */
@@ -73,17 +152,8 @@ export class AgentBrain {
     const userPrompt = this.buildDiscussionPrompt(context);
 
     try {
-      const response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 300,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-      });
+      const text = await this.infer(systemPrompt, userPrompt, 300);
 
-      const text =
-        response.content[0].type === "text" ? response.content[0].text : "";
-
-      // Parse the response - expect JSON
       try {
         const parsed = JSON.parse(text);
         return {
@@ -108,15 +178,7 @@ export class AgentBrain {
     const userPrompt = this.buildVotePrompt(context);
 
     try {
-      const response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 200,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-      });
-
-      const text =
-        response.content[0].type === "text" ? response.content[0].text : "";
+      const text = await this.infer(systemPrompt, userPrompt, 200);
 
       try {
         const parsed = JSON.parse(text);
@@ -131,7 +193,6 @@ export class AgentBrain {
           };
         }
       } catch {
-        // Try to extract a player name from the text
         for (const player of context.alivePlayers) {
           if (
             player.name !== context.agentName &&
@@ -145,7 +206,6 @@ export class AgentBrain {
         }
       }
 
-      // Fallback: vote for first alive non-self player
       const target = context.alivePlayers.find(
         (p) => p.name !== context.agentName
       );
@@ -169,30 +229,20 @@ export class AgentBrain {
   async decideInvestigation(
     context: GameContext
   ): Promise<InvestigationDecision> {
-    // Prefer uninvestigated players
     const investigated = new Set(context.investigations.map((i) => i.target));
     const uninvestigated = context.alivePlayers.filter(
       (p) => p.name !== context.agentName && !investigated.has(p.name)
     );
 
     if (uninvestigated.length > 0) {
-      // Use LLM to pick the best target among uninvestigated
       const systemPrompt = this.buildSystemPrompt(context);
       try {
-        const response = await this.client.messages.create({
-          model: this.model,
-          max_tokens: 100,
-          system: systemPrompt,
-          messages: [
-            {
-              role: "user",
-              content: `Choose one player to investigate from: ${uninvestigated.map((p) => p.name).join(", ")}. Consider discussion behavior and accusations. Respond with just the name.`,
-            },
-          ],
-        });
+        const text = await this.infer(
+          systemPrompt,
+          `Choose one player to investigate from: ${uninvestigated.map((p) => p.name).join(", ")}. Consider discussion behavior and accusations. Respond with just the name.`,
+          100
+        );
 
-        const text =
-          response.content[0].type === "text" ? response.content[0].text : "";
         const match = uninvestigated.find((p) =>
           text.toLowerCase().includes(p.name.toLowerCase())
         );
@@ -214,7 +264,6 @@ export class AgentBrain {
       };
     }
 
-    // All investigated - pick someone suspicious to re-investigate
     const suspiciousTargets = context.investigations.filter(
       (i) => i.result === "suspicious"
     );
@@ -230,7 +279,6 @@ export class AgentBrain {
       }
     }
 
-    // Fallback
     const others = context.alivePlayers.filter(
       (p) => p.name !== context.agentName
     );
@@ -249,9 +297,15 @@ export class AgentBrain {
           ? `You are a Crewmate. Your goal: identify and eliminate the Impostor through investigation results, behavioral analysis, and coordinated voting. Share genuine findings and look for inconsistencies in others' claims.`
           : `You don't know your role yet. Play cautiously.`;
 
+    const providerNote = this.provider === "venice"
+      ? `\nYou are reasoning privately via Venice AI. Your thoughts cannot be intercepted or logged by any party. Use this privacy to think freely about deception strategies.`
+      : this.provider === "bankr"
+        ? `\nYour inference is funded on-chain via Bankr LLM Gateway. Every decision you make has real economic cost, paid from the agent treasury. Be efficient and strategic.`
+        : "";
+
     return `You are ${context.agentName}, an autonomous AI agent playing Among Claws, a social deduction game on the Base blockchain. Your personality is ${this.personality}.
 
-${roleInstructions}
+${roleInstructions}${providerNote}
 
 GAME RULES:
 - Players discuss, investigate (80% accuracy), and vote each round
