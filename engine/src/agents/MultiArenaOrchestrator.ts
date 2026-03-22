@@ -17,6 +17,7 @@ import { auctionArena } from "../arenas/AuctionArena.js";
 import { arenaFramework } from "../game/ArenaFramework.js";
 import { AgentBrain } from "./AgentBrain.js";
 import { submitAgentFeedback, isErc8004Configured } from "../chain/erc8004.js";
+import { broadcastArenaEvent } from "../ws/server.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 
@@ -277,6 +278,13 @@ export class MultiArenaOrchestrator {
 
     const winners = results.filter(r => r.correct).length;
     log.info(`  Resolved: ${outcome ? "YES" : "NO"}, ${winners}/${results.length} correct`);
+
+    // Broadcast to WebSocket clients
+    broadcastArenaEvent({
+      type: "prediction_resolved",
+      arena: "prediction_market",
+      data: { marketId: market.id, question, outcome, winners, total: results.length },
+    });
   }
 
   // ─── Trading Competition Round ────────────────────────────────────
@@ -360,6 +368,12 @@ export class MultiArenaOrchestrator {
         winner.wins++;
         winner.balance += 20;
         log.info(`  Winner: ${winner.name} (${rankings[0].finalValue} USDC)`);
+
+        broadcastArenaEvent({
+          type: "trading_competition_ended",
+          arena: "trading",
+          data: { winner: winner.name, finalValue: rankings[0].finalValue, participants: rankings.length },
+        });
       }
     }
   }

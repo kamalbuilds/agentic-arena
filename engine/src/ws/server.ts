@@ -323,6 +323,21 @@ export function wireGameEvents(room: GameRoom): void {
   );
 }
 
+/** Broadcast arena events to ALL connected clients */
+export function broadcastArenaEvent(event: {
+  type: string;
+  arena: string;
+  data: unknown;
+}): void {
+  if (clients.size === 0) return;
+  const payload = JSON.stringify(event);
+  for (const client of clients.values()) {
+    if (client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(payload);
+    }
+  }
+}
+
 export function getConnectedClients(): number {
   return clients.size;
 }
