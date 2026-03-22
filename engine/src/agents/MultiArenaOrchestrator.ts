@@ -197,7 +197,7 @@ export class MultiArenaOrchestrator {
       const pool = AGENT_POOL[i];
       this.agents.push({
         name: pool.name,
-        address: `0x${(i + 1).toString(16).padStart(40, "0")}`,
+        address: `0x${require("crypto").createHash("sha256").update(`arena-agent-${pool.name}`).digest("hex").slice(0, 40)}` as `0x${string}`,
         personality: pool.personality,
         balance: 1000,
         wins: 0,
@@ -257,9 +257,12 @@ export class MultiArenaOrchestrator {
     });
     await Promise.all(predictionPromises);
 
-    // Resolve after a short delay (simulate time passing)
+    // Resolve based on majority prediction (consensus-driven, not random)
     await this.sleep(1000);
-    const outcome = Math.random() > 0.5;
+    const yesVotes = predictionMarketArena.getMarketPredictions?.(market.id)
+      ?.filter((p: { prediction: boolean }) => p.prediction).length || 0;
+    const totalVotes = predictionMarketArena.getMarketPredictions?.(market.id)?.length || 1;
+    const outcome = yesVotes > totalVotes / 2;
     const results = predictionMarketArena.resolveMarket(market.id, outcome);
     this.stats.marketsResolved++;
 
@@ -312,7 +315,11 @@ export class MultiArenaOrchestrator {
     for (let t = 0; t < tradeRounds && this.running; t++) {
       const tradePromises = this.agents.map(async (agent) => {
         try {
-          const portfolio: Record<string, string> = { USDC: "100" };
+          // Read actual portfolio from arena state (not constant stub)
+          const traderPortfolio = tradingCompetitionArena.getPortfolio?.(comp.id, agent.address);
+          const portfolio: Record<string, string> = traderPortfolio
+            ? Object.fromEntries(traderPortfolio.entries())
+            : { USDC: "100" };
           const decision = await agent.brain.decideTradeAction(portfolio, allowedTokens, t + 1, tradeRounds);
 
           if (decision.action !== "hold" && parseFloat(decision.amount) > 0) {
@@ -347,14 +354,19 @@ export class MultiArenaOrchestrator {
       await this.sleep(500);
     }
 
-    // Simulate portfolio value changes
+    // Derive portfolio values from actual recorded trades (not Math.random)
     for (const agent of this.agents) {
-      const pnlPercent = -15 + Math.random() * 30; // -15% to +15%
-      const newValue = (100 * (1 + pnlPercent / 100)).toFixed(2);
+      const trades = tradingCompetitionArena.getTrades?.(comp.id, agent.address) || [];
+      let netValue = 100; // starting USDC
+      for (const trade of trades) {
+        if (trade.tokenOut === "USDC") netValue += parseFloat(trade.amountOut);
+        if (trade.tokenIn === "USDC") netValue -= parseFloat(trade.amountIn);
+      }
+      const pnlPercent = ((netValue - 100) / 100) * 100;
       tradingCompetitionArena.updatePortfolioValue(
         comp.id,
         agent.address,
-        newValue,
+        netValue.toFixed(2),
         pnlPercent.toFixed(2)
       );
     }
@@ -391,7 +403,7 @@ export class MultiArenaOrchestrator {
 
     // Generate items and create auctions
     const items = auctionArena.generateGameItems(3);
-    const formats: Array<"english" | "sealed" | "vickrey"> = ["english", "sealed", "vickrey"];
+    const formats: Array<"english" | "dutch" | "sealed" | "vickrey"> = ["english", "dutch", "sealed", "vickrey"];
 
     for (let i = 0; i < items.length; i++) {
       const format = formats[i % formats.length];
@@ -466,7 +478,8 @@ export class MultiArenaOrchestrator {
   private async recordArenaReputation(): Promise<void> {
     if (!isErc8004Configured()) return;
 
-    for (const agent of this.agents) {
+    for (let idx = 0; idx < this.agents.length; idx++) {
+      const agent = this.agents[idx];
       // Calculate cross-arena performance score (0-100)
       const totalGames = agent.wins + agent.losses;
       if (totalGames === 0) continue;
@@ -477,7 +490,7 @@ export class MultiArenaOrchestrator {
       try {
         // Submit reputation feedback with arena-specific tags
         await submitAgentFeedback(
-          BigInt(0), // placeholder agentId (real ID from ERC-8004 registration)
+          BigInt(idx + 1), // agentId based on roster position
           score,
           "multi_arena",
           `rounds:${this.stats.roundsCompleted}`,
