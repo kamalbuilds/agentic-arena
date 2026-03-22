@@ -12,6 +12,7 @@ import { autonomousRouter } from "./api/autonomousRoutes.js";
 import { serviceMarketRouter } from "./api/serviceMarketRoutes.js";
 import { conversationLogRouter } from "./api/conversationLogRoutes.js";
 import { safetyRouter } from "./api/safetyRoutes.js";
+import { arenaRouter } from "./api/arenaRoutes.js";
 import { recordSystemEvent } from "./api/conversationLogRoutes.js";
 import { createWebSocketServer, getConnectedClients } from "./ws/server.js";
 import { gameManager } from "./game/GameManager.js";
@@ -48,6 +49,7 @@ app.use(autonomousRouter);
 app.use(serviceMarketRouter);
 app.use(conversationLogRouter);
 app.use(safetyRouter);
+app.use(arenaRouter);
 
 // 404 handler
 app.use((_req, res) => {
@@ -146,6 +148,11 @@ async function start(): Promise<void> {
     } else {
       logger.info("  AgentKit: Local wallet derivation (set CDP_API_KEY_ID for CDP wallets)");
     }
+
+    // Multi-Arena Colosseum
+    const arenas = arenaFramework.getAllArenas();
+    logger.info(`  Arenas: ${arenas.length} registered (${arenas.map(a => a.name).join(", ")})`);
+    logger.info("  Arena API: GET /api/arenas for all arena types and state");
 
     // Autonomous Game System
     logger.info("  Autonomous: POST /api/autonomous/start to launch AI-vs-AI games");
