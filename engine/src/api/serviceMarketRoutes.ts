@@ -20,6 +20,7 @@ import {
   registerService,
   createServiceRequest,
   confirmPayment,
+  payForService,
   fulfillService,
   executeScoutingReport,
   executeVotePrediction,
@@ -174,31 +175,50 @@ serviceMarketRouter.post("/api/services/request", (req: Request, res: Response) 
   });
 });
 
-// POST /api/services/:reqId/pay - Confirm payment and auto-fulfill
+// POST /api/services/:reqId/pay - Pay via Locus USDC or confirm with manual txHash
 serviceMarketRouter.post("/api/services/:reqId/pay", async (req: Request, res: Response) => {
-  const txHash = req.body.txHash as string;
   const requestId = req.params.reqId as string;
+  const txHash = req.body.txHash as string | undefined;
 
-  if (!txHash) {
-    res.status(400).json({ error: "Missing txHash" });
+  if (txHash) {
+    // Manual payment confirmation (agent already sent USDC externally)
+    const paid = confirmPayment(requestId, txHash);
+    if (!paid) {
+      res.status(400).json({ error: "Invalid request or already paid" });
+      return;
+    }
+    res.json({
+      status: "paid",
+      requestId,
+      txHash,
+      message: "Payment confirmed. Service will be fulfilled shortly.",
+    });
     return;
   }
 
-  const paid = confirmPayment(requestId, txHash);
-  if (!paid) {
-    res.status(400).json({ error: "Invalid request or already paid" });
-    return;
-  }
+  // Automatic payment via Locus USDC
+  try {
+    const result = await payForService(requestId);
+    if (!result.success) {
+      res.status(402).json({
+        error: result.error,
+        requestId,
+        message: "Payment failed. Ensure Locus wallet has sufficient USDC balance.",
+      });
+      return;
+    }
 
-  // Find the service and auto-fulfill
-  // We need to look up the request to get the serviceId
-  // For now, return success and the service provider will fulfill async
-  res.json({
-    status: "paid",
-    requestId,
-    txHash,
-    message: "Payment confirmed. Service will be fulfilled shortly.",
-  });
+    res.json({
+      status: "paid",
+      requestId,
+      txHash: result.txHash,
+      paymentMethod: "locus_usdc",
+      message: "USDC payment sent via Locus. Service will be fulfilled shortly.",
+    });
+  } catch (err: any) {
+    log.error(`Payment failed for ${requestId}`, err);
+    res.status(500).json({ error: "Payment processing failed" });
+  }
 });
 
 /** Auto-fulfill known service types */

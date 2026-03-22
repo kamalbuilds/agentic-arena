@@ -22,6 +22,7 @@
 
 import { logger } from "../utils/logger.js";
 import { getAgentMemory } from "./AgentMemory.js";
+import { sendUsdc, getBalance } from "../chain/locus.js";
 
 const log = logger.child("AgentServiceMarket");
 
@@ -154,7 +155,7 @@ export function createServiceRequest(opts: {
   return request;
 }
 
-/** Confirm payment for a service request */
+/** Confirm payment for a service request (with optional manual txHash) */
 export function confirmPayment(requestId: string, txHash: string): boolean {
   const request = requests.get(requestId);
   if (!request || request.status !== "pending") return false;
@@ -163,6 +164,55 @@ export function confirmPayment(requestId: string, txHash: string): boolean {
   request.status = "paid";
   log.info(`Payment confirmed for ${requestId}: ${txHash}`);
   return true;
+}
+
+/**
+ * Pay for a service using Locus USDC transfer.
+ * This is the real payment flow: sends USDC from requester to provider,
+ * then confirms the request with the actual transaction hash.
+ */
+export async function payForService(requestId: string): Promise<{
+  success: boolean;
+  txHash?: string;
+  error?: string;
+}> {
+  const request = requests.get(requestId);
+  if (!request) return { success: false, error: "Request not found" };
+  if (request.status !== "pending") return { success: false, error: `Request status is ${request.status}, expected pending` };
+
+  const service = services.get(request.serviceId);
+  if (!service) return { success: false, error: "Service not found" };
+
+  try {
+    // Check requester balance first
+    const balanceResult = await getBalance();
+    const price = parseFloat(service.priceUSDC);
+    if (parseFloat(balanceResult.balance) < price) {
+      return { success: false, error: `Insufficient balance: ${balanceResult.balance} USDC < ${service.priceUSDC} USDC` };
+    }
+
+    // Send USDC from requester to provider via Locus
+    const result = await sendUsdc(
+      service.providerAddress,
+      service.priceUSDC,
+      `Service payment: ${service.serviceType} (${requestId})`
+    );
+
+    const txId = result.transactionId || result.txHash;
+    if (txId) {
+      request.paymentTxHash = txId;
+      request.status = "paid";
+      log.info(`Service payment sent: ${service.priceUSDC} USDC for ${requestId}, tx: ${txId}`);
+      return { success: true, txHash: txId };
+    } else if (result.approvalUrl) {
+      return { success: false, error: `Payment requires approval: ${result.approvalUrl}` };
+    } else {
+      return { success: false, error: "Payment sent but no transaction ID returned" };
+    }
+  } catch (err: any) {
+    log.error(`Service payment failed for ${requestId}`, err);
+    return { success: false, error: err.message || "Payment failed" };
+  }
 }
 
 /** Fulfill a service request (provider delivers the result) */

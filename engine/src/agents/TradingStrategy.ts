@@ -130,7 +130,20 @@ Should you make a trade? If so, what?`;
         response.content[0].type === "text" ? response.content[0].text : "";
 
       try {
-        const parsed = JSON.parse(text) as TradeDecision;
+        // Strip markdown fences and any preamble text before JSON
+        let cleaned = text.trim();
+        const jsonMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          cleaned = jsonMatch[1].trim();
+        } else {
+          // Try to find JSON object in the response
+          const braceStart = cleaned.indexOf("{");
+          const braceEnd = cleaned.lastIndexOf("}");
+          if (braceStart !== -1 && braceEnd > braceStart) {
+            cleaned = cleaned.slice(braceStart, braceEnd + 1);
+          }
+        }
+        const parsed = JSON.parse(cleaned) as TradeDecision;
         return {
           action: parsed.action || "skip",
           tokenIn: parsed.tokenIn,
