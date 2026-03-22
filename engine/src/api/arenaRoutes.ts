@@ -378,3 +378,71 @@ arenaRouter.get("/api/arenas/orchestrate/status", (_req: Request, res: Response)
   }
   res.json(orchestrator.getStatus());
 });
+
+// ─── Cross-Arena Leaderboard ────────────────────────────────────────
+
+arenaRouter.get("/api/arenas/leaderboard", (_req: Request, res: Response) => {
+  // Aggregate agent performance across all arena types
+  const predictionStats = predictionMarketArena.getAllAgentStats();
+  const allComps = tradingCompetitionArena.getAllCompetitions();
+
+  // Build cross-arena agent map
+  const agentMap = new Map<string, {
+    name: string;
+    address: string;
+    predictions: { total: number; correct: number; accuracy: number };
+    trading: { competitions: number; wins: number; totalPnl: number };
+    auctions: { bidsPlaced: number; itemsWon: number };
+    overallScore: number;
+  }>();
+
+  // Add prediction stats
+  for (const stat of predictionStats) {
+    agentMap.set(stat.agentAddress, {
+      name: stat.agentName,
+      address: stat.agentAddress,
+      predictions: {
+        total: stat.totalPredictions,
+        correct: stat.correctPredictions,
+        accuracy: stat.accuracy,
+      },
+      trading: { competitions: 0, wins: 0, totalPnl: 0 },
+      auctions: { bidsPlaced: 0, itemsWon: 0 },
+      overallScore: stat.accuracy * 0.4, // 40% weight for prediction accuracy
+    });
+  }
+
+  // Add trading stats from completed competitions
+  for (const comp of allComps.filter(c => c.status === "completed")) {
+    const participants = Array.from(comp.participants.values());
+    for (const participant of participants) {
+      const existing = agentMap.get(participant.agentAddress);
+      const pnl = parseFloat(participant.pnl || "0");
+      if (existing) {
+        existing.trading.competitions++;
+        existing.trading.totalPnl += pnl;
+        existing.overallScore += pnl > 0 ? 20 : 0; // 20 points for profitable competition
+      } else {
+        agentMap.set(participant.agentAddress, {
+          name: participant.agentName,
+          address: participant.agentAddress,
+          predictions: { total: 0, correct: 0, accuracy: 0 },
+          trading: { competitions: 1, wins: 0, totalPnl: pnl },
+          auctions: { bidsPlaced: 0, itemsWon: 0 },
+          overallScore: pnl > 0 ? 20 : 0,
+        });
+      }
+    }
+  }
+
+  // Sort by overall score
+  const leaderboard = Array.from(agentMap.values())
+    .sort((a, b) => b.overallScore - a.overallScore)
+    .map((agent, i) => ({ rank: i + 1, ...agent }));
+
+  res.json({
+    leaderboard,
+    lastUpdated: Date.now(),
+    arenaCount: 4,
+  });
+});
