@@ -390,6 +390,8 @@ export class MultiArenaOrchestrator {
       );
       if (!auction) continue;
 
+      // Activate the auction so bids can be placed
+      auctionArena.startAuction(auction.id);
       const auctionId = auction.id;
       const baseValue = parseFloat(items[i].baseValue);
 

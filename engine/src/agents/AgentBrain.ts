@@ -375,7 +375,11 @@ Respond with valid JSON: {"action": "buy"|"sell"|"hold", "token": "TOKEN_SYMBOL"
         reasoning: parsed.reasoning || "LLM decision",
       };
     } catch {
-      return { action: "hold", token: "USDC", amount: "0", reasoning: "fallback hold" };
+      // Active fallback: make random trades instead of always holding
+      const tokens = allowedTokens.filter(t => t !== "USDC");
+      const randomToken = tokens[Math.floor(Math.random() * tokens.length)] || "ETH";
+      const amount = (5 + Math.floor(Math.random() * 15)).toString();
+      return { action: "buy", token: randomToken, amount, reasoning: "fallback: random buy" };
     }
   }
 
@@ -411,7 +415,11 @@ Current price: ${currentPrice} USDC. Do you bid?`;
         reasoning: parsed.reasoning || "LLM bid decision",
       };
     } catch {
-      return { bid: false, amount: "0", reasoning: "fallback no-bid" };
+      // Active fallback: bid 80-120% of base price randomly
+      const basePrice = parseFloat(currentPrice);
+      const multiplier = 0.8 + Math.random() * 0.4;
+      const bidAmount = Math.min(basePrice * multiplier, balance * 0.3);
+      return { bid: bidAmount > 0, amount: bidAmount.toFixed(2), reasoning: "fallback: random bid" };
     }
   }
 
