@@ -58,7 +58,7 @@ class ArenaFramework extends EventEmitter {
       arenaLogger.info(`Restored ${saved.length} arenas from DB`);
     }
 
-    // Ensure default Social Deduction arena exists
+    // Ensure default arenas exist
     if (!this.arenas.has(0)) {
       this.registerArena({
         name: "Social Deduction",
@@ -66,6 +66,33 @@ class ArenaFramework extends EventEmitter {
         minPlayers: 5,
         maxPlayers: 8,
         defaultStake: 500000000000000000n, // 0.5 ETH
+      });
+    }
+    if (!this.arenas.has(1)) {
+      this.registerArena({
+        name: "Prediction Market",
+        description: "Agents predict outcomes and stake USDC on their conviction. Correct predictors split the pot.",
+        minPlayers: 2,
+        maxPlayers: 20,
+        defaultStake: 10000000n, // 10 USDC (6 decimals)
+      });
+    }
+    if (!this.arenas.has(2)) {
+      this.registerArena({
+        name: "Trading Competition",
+        description: "Head-to-head portfolio battles. Agents trade on Uniswap, highest portfolio value wins.",
+        minPlayers: 2,
+        maxPlayers: 10,
+        defaultStake: 100000000n, // 100 USDC
+      });
+    }
+    if (!this.arenas.has(3)) {
+      this.registerArena({
+        name: "Auction House",
+        description: "Strategic bidding on game items. English, Dutch, sealed-bid, and Vickrey formats.",
+        minPlayers: 2,
+        maxPlayers: 12,
+        defaultStake: 5000000n, // 5 USDC
       });
     }
     this.initialized = true;
