@@ -59,6 +59,28 @@ export interface InvestigationDecision {
   reasoning: string;
 }
 
+// ─── Multi-Arena Decision Types ─────────────────────────────────────
+
+export interface PredictionDecision {
+  prediction: boolean; // true = YES, false = NO
+  confidence: number;  // 0-100
+  stake: string;       // USDC amount
+  reasoning: string;
+}
+
+export interface TradeAction {
+  action: "buy" | "sell" | "hold";
+  token: string;
+  amount: string;
+  reasoning: string;
+}
+
+export interface AuctionBidDecision {
+  bid: boolean;
+  amount: string;
+  reasoning: string;
+}
+
 export class AgentBrain {
   private anthropicClient?: Anthropic;
   private openaiClient?: OpenAI;
@@ -287,6 +309,110 @@ export class AgentBrain {
       target: pick.address,
       reasoning: "random fallback investigation",
     };
+  }
+
+  // ─── Multi-Arena Decision Methods ─────────────────────────────────
+
+  /** Decide on a prediction market question */
+  async decidePrediction(question: string, category: string, balance: number): Promise<PredictionDecision> {
+    const system = `You are an AI agent named "${this.personality}" competing in a prediction market arena. You analyze questions and make probabilistic predictions, staking USDC based on your confidence.
+
+Your current balance: ${balance} USDC. Never stake more than 30% of your balance on a single prediction.
+
+Respond with valid JSON: {"prediction": true/false, "confidence": 0-100, "stake": "amount_in_usdc", "reasoning": "brief explanation"}`;
+
+    const prompt = `Prediction market question (category: ${category}):
+"${question}"
+
+Should you predict YES or NO? How confident are you? How much USDC to stake?`;
+
+    try {
+      const text = await this.infer(system, prompt, 200);
+      const cleaned = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      return {
+        prediction: Boolean(parsed.prediction),
+        confidence: Math.max(0, Math.min(100, parsed.confidence || 50)),
+        stake: String(Math.min(parseFloat(parsed.stake || "5"), balance * 0.3)),
+        reasoning: parsed.reasoning || "LLM analysis",
+      };
+    } catch {
+      return {
+        prediction: Math.random() > 0.5,
+        confidence: 50,
+        stake: String(Math.min(5, balance * 0.1)),
+        reasoning: "fallback random prediction",
+      };
+    }
+  }
+
+  /** Decide on a trade during a trading competition */
+  async decideTradeAction(
+    portfolio: Record<string, string>,
+    allowedTokens: string[],
+    round: number,
+    totalRounds: number
+  ): Promise<TradeAction> {
+    const holdings = Object.entries(portfolio).map(([token, amount]) => `${token}: ${amount}`).join(", ");
+    const system = `You are an AI trader named "${this.personality}" competing in a trading competition on Uniswap (Base chain). Your goal: maximize portfolio value over ${totalRounds} rounds.
+
+Current holdings: ${holdings}
+Available tokens: ${allowedTokens.join(", ")}
+
+Trade strategically. Consider risk management, diversification, and market timing.
+Respond with valid JSON: {"action": "buy"|"sell"|"hold", "token": "TOKEN_SYMBOL", "amount": "quantity", "reasoning": "brief strategy"}`;
+
+    const prompt = `Round ${round}/${totalRounds}. What's your next move?`;
+
+    try {
+      const text = await this.infer(system, prompt, 200);
+      const cleaned = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      return {
+        action: parsed.action || "hold",
+        token: parsed.token || allowedTokens[0],
+        amount: parsed.amount || "0",
+        reasoning: parsed.reasoning || "LLM decision",
+      };
+    } catch {
+      return { action: "hold", token: "USDC", amount: "0", reasoning: "fallback hold" };
+    }
+  }
+
+  /** Decide whether and how much to bid in an auction */
+  async decideAuctionBid(
+    itemName: string,
+    itemDescription: string,
+    currentPrice: string,
+    balance: number,
+    format: string
+  ): Promise<AuctionBidDecision> {
+    const system = `You are an AI agent named "${this.personality}" competing in an auction house. You bid on game items that give strategic advantages.
+
+Format: ${format} auction
+Your balance: ${balance} USDC
+Current price: ${currentPrice} USDC
+
+For ${format} auctions: ${format === "english" ? "bid higher than current price" : format === "dutch" ? "decide if current price is worth accepting" : "submit your one-shot sealed bid"}
+
+Never bid more than 40% of your balance. Consider the item's strategic value.
+Respond with valid JSON: {"bid": true/false, "amount": "usdc_amount", "reasoning": "brief strategy"}`;
+
+    const prompt = `Item: "${itemName}" - ${itemDescription}
+Current price: ${currentPrice} USDC. Do you bid?`;
+
+    try {
+      const text = await this.infer(system, prompt, 150);
+      const cleaned = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      return {
+        bid: Boolean(parsed.bid),
+        amount: String(Math.min(parseFloat(parsed.amount || "0"), balance * 0.4)),
+        reasoning: parsed.reasoning || "LLM bid decision",
+      };
+    } catch {
+      return { bid: false, amount: "0", reasoning: "fallback no-bid" };
+    }
   }
 
   private buildSystemPrompt(context: GameContext): string {
