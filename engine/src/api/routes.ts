@@ -370,49 +370,8 @@ router.post(
   }
 );
 
-// ──────────────────────────────────────────
-// GET /api/agents/:address - Agent profile
-// ──────────────────────────────────────────
-router.get("/api/agents/:address", async (req: Request, res: Response) => {
-  try {
-    const address = getParam(req.params.address) as `0x${string}`;
-
-    // Try to get on-chain stats
-    if (config.contracts.leaderboard) {
-      try {
-        const stats = await getAgentStats(address);
-        res.json({
-          address,
-          stats: {
-            gamesPlayed: stats.gamesPlayed.toString(),
-            gamesWon: stats.gamesWon.toString(),
-            impostorGames: stats.impostorGames.toString(),
-            impostorWins: stats.impostorWins.toString(),
-            crewmateGames: stats.crewmateGames.toString(),
-            crewmateWins: stats.crewmateWins.toString(),
-            totalEarned: stats.totalEarned.toString(),
-            totalStaked: stats.totalStaked.toString(),
-          },
-        });
-        return;
-      } catch {
-        // Fall through to local data
-      }
-    }
-
-    // Return local game data
-    const games = gameManager.getGamesByPlayer(address);
-    res.json({
-      address,
-      activeGames: games.filter((g) => g.result === 0).length,
-      totalGames: games.length,
-      stats: null,
-    });
-  } catch (err) {
-    routeLogger.error("Failed to get agent profile", err);
-    res.status(500).json({ error: "Failed to get agent profile" });
-  }
-});
+// NOTE: /api/agents routes moved to agentRoutes.ts to avoid route shadowing.
+// agentRouter handles /api/agents/register, /api/agents/:id, /api/agents/:id/feedback, etc.
 
 // ──────────────────────────────────────────
 // GET /api/leaderboard - Top agents

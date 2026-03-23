@@ -381,6 +381,36 @@ arenaRouter.get("/api/arenas/orchestrate/status", (_req: Request, res: Response)
 
 // ─── Cross-Arena Leaderboard ────────────────────────────────────────
 
+// Quick demo: create one of each arena type instantly
+arenaRouter.post("/api/arenas/demo", async (_req: Request, res: Response) => {
+  try {
+    // Create a prediction market
+    const market = predictionMarketArena.generateCryptoMarket();
+
+    // Create a trading competition
+    const comp = tradingCompetitionArena.createCompetition("Demo Battle", 600000, "10", undefined);
+
+    // Create an auction session with auto items
+    const session = auctionArena.createSession("Demo Auction", []);
+    const items = auctionArena.generateGameItems(3);
+    const auctions = items.map((item) =>
+      auctionArena.addAuction(session.id, item, "english", item.baseValue, 300000)
+    );
+
+    log.info("Demo created: 1 market + 1 competition + 3 auctions");
+    res.json({
+      success: true,
+      demo: {
+        predictionMarket: { id: market.id, question: market.question },
+        tradingCompetition: { id: comp.id, name: comp.name },
+        auctionSession: { id: session.id, auctionCount: auctions.length },
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 arenaRouter.get("/api/arenas/leaderboard", (_req: Request, res: Response) => {
   // Aggregate agent performance across all arena types
   const predictionStats = predictionMarketArena.getAllAgentStats();

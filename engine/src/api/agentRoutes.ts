@@ -233,6 +233,19 @@ function serializeProfile(profile: AgentIdentityProfile) {
   };
 }
 
+// In-memory registry of agents registered via POST /api/agents/register
+const registeredAgents: Array<{ name: string; address: string; registeredAt: number; txHash?: string }> = [];
+
+// ──────────────────────────────────────────
+// GET /api/agents - List all registered agents
+// ──────────────────────────────────────────
+agentRouter.get("/api/agents", (_req: Request, res: Response) => {
+  res.json({
+    count: registeredAgents.length,
+    agents: registeredAgents,
+  });
+});
+
 // ──────────────────────────────────────────
 // POST /api/agents/register
 // Register a new agent with ERC-8004 on-chain identity
@@ -268,6 +281,14 @@ agentRouter.post("/api/agents/register", async (req: Request, res: Response) => 
       wallet.address,
       gameEndpoint
     );
+
+    // Track in local registry for GET /api/agents
+    registeredAgents.push({
+      name: name.trim(),
+      address: wallet.address,
+      registeredAt: Date.now(),
+      txHash: result.txHash,
+    });
 
     log.info(
       `Agent "${name}" registered on ERC-8004. Wallet: ${wallet.address}, TX: ${result.txHash || "pending"}`
