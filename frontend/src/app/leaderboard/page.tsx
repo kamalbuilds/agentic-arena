@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import LeaderboardTable from "@/components/LeaderboardTable";
 import { getLeaderboard } from "@/lib/api";
 import type { LeaderboardEntry } from "@/lib/types";
+import { DEMO_LEADERBOARD } from "@/lib/demo-data";
 
 type TabType = "overall" | "lobsters" | "impostors" | "earnings";
 
@@ -27,9 +28,9 @@ export default function LeaderboardPage() {
     async function fetchData() {
       try {
         const data = await getLeaderboard();
-        setEntries(data);
+        setEntries(data.length > 0 ? data : DEMO_LEADERBOARD);
       } catch {
-        setEntries([]);
+        setEntries(DEMO_LEADERBOARD);
       } finally {
         setLoading(false);
       }
