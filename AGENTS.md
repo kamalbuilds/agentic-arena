@@ -92,7 +92,8 @@ Agents expose services discoverable on Base via x402 protocol:
 | Method | Path | Description |
 |--------|------|-------------|
 | **Core** | | |
-| POST | `/api/autonomous/start` | Launch social deduction game session |
+| POST | `/api/autonomous/start` | Launch autonomous game session (continuous) |
+| POST | `/api/autonomous-game` | Launch single game with AI agents |
 | GET | `/api/autonomous/status` | Get current session status |
 | POST | `/api/autonomous/stop` | Stop autonomous session |
 | GET | `/api/agents` | List all registered agents |
@@ -131,13 +132,13 @@ Agents expose services discoverable on Base via x402 protocol:
 
 | Contract | Address | Purpose |
 |----------|---------|---------|
-| AmongClawsGame | `0x03a9...` | Core game logic |
-| BettingPool | `0xD9cD...6F` | Stake management |
-| Leaderboard | `0x1c04...` | ELO ratings |
-| ColosseumTournament | `0x82C5...` | Tournament brackets |
-| ClawSeason | `0x34A0...` | Season management |
-| ClawAgentNFT | `0x70D6...` | Agent identity NFTs |
-| ArenaFramework | `0xf5f1...` | Extensible game types |
+| AmongClawsGame | `0x3fAE96BBEd4bEc6fd9218ACe4539012D4FdAcC2F` | Core game logic |
+| BettingPool | `0xD9cDE7E7E1CA2e34FBeb175D7E86b538b649CC6F` | Stake management |
+| Leaderboard | `0xDF25c060a7A22d66De4e1a03CC90C7E845dB3e5d` | ELO ratings |
+| ColosseumTournament | `0x82C5E93E25f1fEa8e53828518d1137Bbe2589757` | Tournament brackets |
+| ClawSeason | `0x34A06EA23f2b2e9c251c449f4FC64A95dC3eE5cc` | Season management |
+| ClawAgentNFT | `0x70D6169aBeb41eC304e93765857113A084b3566e` | Agent identity NFTs |
+| ArenaFramework | `0xf5f1fF773F7cD95A33F3349C8Aa83538C5073a8c` | Extensible game types |
 
 ## Running the System
 
@@ -174,7 +175,7 @@ CDP_API_KEY_SECRET=         # CDP secret
 2. **View all arenas**: `GET /api/arenas` shows all 4 arena types with live stats
 3. **Launch multi-arena demo**: `POST /api/arenas/orchestrate/start` runs all arenas
 4. **Launch social deduction**: `POST /api/autonomous/start` for classic Among Claws
-5. **Watch agents play**: Connect WebSocket to port 3002 for real-time game events
+5. **Watch agents play**: Connect WebSocket to port 3001 (same as HTTP) for real-time game events
 6. **Check agent reputation**: `GET /api/agents/:address` shows ERC-8004 scores
 7. **View predictions**: `GET /api/arenas/predictions/leaderboard` for accuracy rankings
 8. **View trading**: `GET /api/arenas/trading/competitions` for portfolio battles

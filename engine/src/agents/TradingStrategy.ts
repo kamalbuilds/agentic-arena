@@ -23,6 +23,7 @@ import {
 import { getBalance as getLocusBalance } from "../chain/locus.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
+import { checkTransaction, recordTransaction } from "../agents/SafetyGuardrails.js";
 
 const log = logger.child("TradingStrategy");
 
@@ -54,6 +55,7 @@ export interface TradeLog {
 export class TradingStrategy {
   private client: Anthropic;
   private model: string;
+  private agentName: string;
   private tradeLog: TradeLog[] = [];
   private maxTradesPerGame = 3;
   private tradesThisGame = 0;
@@ -62,11 +64,13 @@ export class TradingStrategy {
     apiKey?: string;
     model?: string;
     maxTradesPerGame?: number;
+    agentName?: string;
   }) {
     this.client = new Anthropic({
       apiKey: options.apiKey || process.env.ANTHROPIC_API_KEY,
     });
     this.model = options.model || "claude-sonnet-4-5-20250514";
+    this.agentName = options.agentName || "unknown-agent";
     if (options.maxTradesPerGame) {
       this.maxTradesPerGame = options.maxTradesPerGame;
     }
@@ -186,6 +190,27 @@ Should you make a trade? If so, what?`;
 
     try {
       const amount = parseTokenAmount(decision.amount, decision.tokenIn);
+      const amountUSDC = parseFloat(decision.amount);
+
+      // Safety guardrails check before executing
+      const safetyCheck = checkTransaction({
+        agentName: this.agentName,
+        action: "trade",
+        amountUSDC: isNaN(amountUSDC) ? 1 : amountUSDC,
+      });
+
+      if (!safetyCheck.allowed) {
+        log.warn(`Trade blocked by SafetyGuardrails: ${safetyCheck.reason}`);
+        recordTransaction({
+          agentName: this.agentName,
+          action: "trade",
+          amount: decision.amount,
+          asset: `${decision.tokenIn}->${decision.tokenOut}`,
+          blocked: true,
+          blockReason: safetyCheck.reason,
+        });
+        return null;
+      }
 
       log.info(
         `Executing trade: ${decision.amount} ${decision.tokenIn} -> ${decision.tokenOut} for ${walletAddress}`
@@ -196,6 +221,15 @@ Should you make a trade? If so, what?`;
         tokenOut: decision.tokenOut,
         amount,
         swapperAddress: walletAddress,
+      });
+
+      // Record successful trade in audit trail
+      recordTransaction({
+        agentName: this.agentName,
+        action: "trade",
+        amount: decision.amount,
+        asset: `${decision.tokenIn}->${decision.tokenOut}`,
+        txHash: result.txHash,
       });
 
       this.tradesThisGame++;

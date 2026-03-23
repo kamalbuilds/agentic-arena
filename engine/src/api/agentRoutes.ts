@@ -287,7 +287,7 @@ agentRouter.post("/api/agents/register", async (req: Request, res: Response) => 
       name: name.trim(),
       address: wallet.address,
       registeredAt: Date.now(),
-      txHash: result.txHash,
+      txHash: result.txHash ?? undefined,
     });
 
     log.info(
