@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { GameSummary } from "@/lib/types";
 import { getGames } from "@/lib/api";
+import { DEMO_GAMES } from "@/lib/demo-data";
 
 const POLL_INTERVAL = 5000;
 
@@ -10,6 +11,7 @@ interface UseGamesReturn {
   games: GameSummary[];
   loading: boolean;
   error: string | null;
+  isDemo: boolean;
   refetch: () => void;
 }
 
@@ -17,21 +19,29 @@ export function useGames(): UseGamesReturn {
   const [games, setGames] = useState<GameSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   const fetchGames = useCallback(async () => {
     try {
       const data = await getGames();
-      // Ensure data is an array (API might return { games: [...] })
       const arr = Array.isArray(data)
         ? data
         : Array.isArray((data as Record<string, unknown>)?.games)
           ? (data as Record<string, unknown>).games as GameSummary[]
           : [];
-      setGames(arr);
-      setError(null);
+      if (arr.length > 0) {
+        setGames(arr);
+        setIsDemo(false);
+        setError(null);
+      } else {
+        setGames(DEMO_GAMES);
+        setIsDemo(true);
+        setError(null);
+      }
     } catch {
-      setGames([]);
-      setError("Failed to connect to game server");
+      setGames(DEMO_GAMES);
+      setIsDemo(true);
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -43,5 +53,5 @@ export function useGames(): UseGamesReturn {
     return () => clearInterval(interval);
   }, [fetchGames]);
 
-  return { games, loading, error, refetch: fetchGames };
+  return { games, loading, error, isDemo, refetch: fetchGames };
 }

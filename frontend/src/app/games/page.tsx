@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Gamepad2, Filter, ArrowUpDown } from "lucide-react";
+import { Gamepad2, Filter, ArrowUpDown, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GameCard from "@/components/GameCard";
 import { useGames } from "@/hooks/useGames";
@@ -11,7 +11,7 @@ type FilterType = "all" | "active" | "completed";
 type SortType = "newest" | "highest_stake" | "most_players";
 
 export default function GamesPage() {
-  const { games, loading } = useGames();
+  const { games, loading, isDemo } = useGames();
   const [filter, setFilter] = useState<FilterType>("all");
   const [sort, setSort] = useState<SortType>("newest");
 
@@ -96,6 +96,18 @@ export default function GamesPage() {
         {/* Decorative line */}
         <div className="mt-4 h-[1px] bg-gradient-to-r from-red-500/40 via-purple-500/20 to-transparent" />
       </motion.div>
+
+      {/* Demo mode banner */}
+      {isDemo && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-medium"
+        >
+          <Activity className="h-3.5 w-3.5" />
+          <span>Showing demo games. The engine is currently offline. Start the engine to see live games.</span>
+        </motion.div>
+      )}
 
       {/* Filters & Sort */}
       <motion.div
